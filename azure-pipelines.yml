@@ -10,7 +10,7 @@ stages:
         displayName: Build and Test Job
 
         pool:
-         vmImage: 'ubuntu-latest'
+         name: Finance
          demands:
          - myCustomCapability 
 
