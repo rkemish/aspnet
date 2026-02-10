@@ -45,15 +45,19 @@ stages:
             inputs:
               command: 'test'
               projects: '**/*Tests.csproj'
-              arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage"'
+              arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --settings aspnet.Tests/coverage.runsettings'
 
           - task: PublishCodeCoverageResults@2
             displayName: 'Publish Code Coverage'
             inputs:
               summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
 
-      - job: Deploy
+      - job: SecurityAnalysis
         dependsOn: BuildTest 
-        condition: and(succeeded(), eq(variables.isMain, false))
+        condition: and(succeeded(), eq(variables.isMain, true))
+
+        steps:
+
+          - task: MicrosoftSecurityDevOps@1
          
     
