@@ -1,16 +1,15 @@
+name: 'Azure Devops Pipeline Demo'
+
 trigger:
   - main
 
-
 variables:
+  group: my-variable-group
   isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
-
 
 stages:
   - stage: BuildTest
     displayName: Build and Test Stage
-
-    
 
     jobs:
       - job: BuildTest
@@ -26,6 +25,7 @@ stages:
           buildConfiguration: 'Release'
 
         steps:
+          - script: echo $(myhello)
 
           - task: DotNetCoreCLI@2
             displayName: 'Restore'
