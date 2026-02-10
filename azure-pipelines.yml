@@ -14,17 +14,12 @@ stages:
 
     jobs:
       - job: BuildTest
-        strategy:
-          matrix:
-            linux:
-              imageName: 'ubuntu-latest'
-            windows:
-              imageName: 'windows-latest'
+     
 
         displayName: Build and Test Job
 
         pool:
-          vmImage: $(imageName)
+          vmImage: 'ubuntu-latest'
 
         variables:
           solution: '**/*.sln'
