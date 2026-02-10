@@ -1,18 +1,27 @@
 trigger:
   - main
 
+
+
 stages:
   - stage: BuildTest
     displayName: Build and Test Stage
 
+    
+
     jobs:
       - job: BuildTest
+        strategy:
+          matrix:
+            linux:
+              imageName: 'ubuntu-latest'
+            windows:
+              imageName: 'windows-latest'
+
         displayName: Build and Test Job
 
         pool:
-         name: Finance
-         demands:
-         - myCustomCapability 
+          vmImage: $(imageName)
 
         variables:
           solution: '**/*.sln'
