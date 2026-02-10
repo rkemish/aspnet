@@ -2,6 +2,9 @@ trigger:
   - main
 
 
+variables:
+  isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+
 
 stages:
   - stage: BuildTest
@@ -48,3 +51,9 @@ stages:
               command: 'test'
               projects: '**/*Tests.csproj'
               arguments: '--configuration $(buildConfiguration)'
+
+      - job: Deploy
+        dependsOn: BuildTest 
+        condition: and(succeeded(), eq(variables.isMain, false))
+         
+    
