@@ -9,29 +9,31 @@ stages:
       - job: BuildTest
         displayName: Build and Test Job
 
-        pool: 'Finance'
+        pool:
+          vmImage: 'ubuntu-24.04-arm64'
 
         variables:
           solution: '**/*.sln'
-          buildPlatform: 'AnyCPU'
           buildConfiguration: 'Release'
 
         steps:
 
-          - task: NuGetToolInstaller@1
-
-          - task: NuGetCommand@2
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
             inputs:
-              restoreSolution: '$(solution)'
+              command: 'restore'
+              projects: '$(solution)'
 
-          - task: VSBuild@1
+          - task: DotNetCoreCLI@2
+            displayName: 'Build'
             inputs:
-              solution: '$(solution)'
-              msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
-              platform: '$(buildPlatform)'
-              configuration: '$(buildConfiguration)'
+              command: 'build'
+              projects: '$(solution)'
+              arguments: '--configuration $(buildConfiguration)'
 
-          - task: VSTest@2
+          - task: DotNetCoreCLI@2
+            displayName: 'Run Tests'
             inputs:
-              platform: '$(buildPlatform)'
-              configuration: '$(buildConfiguration)'
+              command: 'test'
+              projects: '**/*Tests.csproj'
+              arguments: '--configuration $(buildConfiguration)'
