@@ -9,8 +9,7 @@ stages:
       - job: BuildTest
         displayName: Build and Test Job
 
-        pool:
-          vmImage: 'windows-latest'
+        pool: 'Finance'
 
         variables:
           solution: '**/*.sln'
