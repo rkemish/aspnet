@@ -37,7 +37,7 @@ stages:
           - checkout: self
           - checkout: starter_rkemish
 
-          - script: echo '$(myhello)''
+          - script: echo '$(myhello)'
 
           - task: DotNetCoreCLI@2
             displayName: 'Restore'
