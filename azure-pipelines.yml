@@ -9,7 +9,8 @@ stages:
       - job: BuildTest
         displayName: Build and Test Job
 
-        pool: 'Finance'
+        pool:
+         vmImage: 'ubuntu-latest'
 
         variables:
           solution: '**/*.sln'
