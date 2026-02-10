@@ -11,6 +11,8 @@ stages:
 
         pool:
          vmImage: 'ubuntu-latest'
+         demands:
+         - myCustomCapability 
 
         variables:
           solution: '**/*.sln'
