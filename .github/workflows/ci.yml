@@ -17,12 +17,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout starter_rkemish
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/starter_rkemish
-          path: starter_rkemish
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
