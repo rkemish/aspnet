@@ -1,6 +1,19 @@
 using aspnet.Models;
+using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Connect to Azure App Configuration if an endpoint is configured.
+// In Azure, the endpoint is set via the AppConfiguration__Endpoint app setting.
+// Locally, it falls back to appsettings.json values.
+var appConfigEndpoint = builder.Configuration["AppConfiguration:Endpoint"];
+if (!string.IsNullOrEmpty(appConfigEndpoint))
+{
+    builder.Configuration.AddAzureAppConfiguration(options =>
+    {
+        options.Connect(new Uri(appConfigEndpoint), new DefaultAzureCredential());
+    });
+}
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
