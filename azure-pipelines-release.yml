@@ -1,0 +1,156 @@
+name: 'Release Pipeline'
+
+# ──────────────────────────────────────────────
+# Triggered by successful CI pipeline on main
+# ──────────────────────────────────────────────
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: ci
+      source: 'CI Pipeline'
+      trigger:
+        branches:
+          include:
+            - main
+
+variables:
+  - group: deployment-details
+  - name: containerImage
+    value: '$(acrName).azurecr.io/$(webAppName):$(resources.pipeline.ci.runID)'
+
+stages:
+
+  # ──────────────────────────────────────────────
+  # Stage 1: Provision Infrastructure (Bicep)
+  # ──────────────────────────────────────────────
+  - stage: Infrastructure
+    displayName: Provision Infrastructure
+
+    jobs:
+      - job: DeployBicep
+        displayName: Deploy Bicep Templates
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: 'Deploy Bicep'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az group create \
+                  --name "$(resourceGroupName)" \
+                  --location "$(location)"
+
+                az deployment group create \
+                  --resource-group "$(resourceGroupName)" \
+                  --template-file infra/main.bicep \
+                  --parameters infra/main.bicepparam \
+                  --parameters \
+                    appName="$(webAppName)" \
+                    acrName="$(acrName)" \
+                    containerImageTag="$(resources.pipeline.ci.runID)"
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Deploy to Staging Slot (Blue)
+  # ──────────────────────────────────────────────
+  - stage: DeployStaging
+    displayName: Deploy to Staging Slot
+    dependsOn: Infrastructure
+
+    jobs:
+      - deployment: DeployToStaging
+        displayName: Deploy to Staging
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'staging'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  displayName: 'Deploy to Staging Slot'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    appName: '$(webAppName)'
+                    deployToSlotOrASE: true
+                    resourceGroupName: '$(resourceGroupName)'
+                    slotName: 'staging'
+                    containers: '$(containerImage)'
+
+                - task: AzureCLI@2
+                  displayName: 'Verify Staging Health'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      STAGING_URL="https://$(webAppName)-staging.azurewebsites.net"
+                      echo "Waiting for staging slot to respond..."
+
+                      for i in $(seq 1 30); do
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL" || true)
+                        if [ "$STATUS" = "200" ]; then
+                          echo "Staging slot is healthy (HTTP 200)"
+                          exit 0
+                        fi
+                        echo "Attempt $i: HTTP $STATUS - retrying in 10s..."
+                        sleep 10
+                      done
+
+                      echo "##vso[task.logissue type=error]Staging slot health check failed"
+                      exit 1
+
+  # ──────────────────────────────────────────────
+  # Stage 3: Manual Approval and Swap (Green)
+  # ──────────────────────────────────────────────
+  - stage: SwapToProduction
+    displayName: Swap to Production
+    dependsOn: DeployStaging
+
+    jobs:
+      - deployment: SwapSlots
+        displayName: Swap Staging to Production
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureAppServiceManage@0
+                  displayName: 'Swap Staging → Production'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    action: 'Swap Slots'
+                    webAppName: '$(webAppName)'
+                    resourceGroupName: '$(resourceGroupName)'
+                    sourceSlot: 'staging'
+
+                - task: AzureCLI@2
+                  displayName: 'Verify Production Health'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      PROD_URL="https://$(webAppName).azurewebsites.net"
+                      echo "Verifying production after swap..."
+
+                      for i in $(seq 1 10); do
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL" || true)
+                        if [ "$STATUS" = "200" ]; then
+                          echo "Production is healthy (HTTP 200)"
+                          exit 0
+                        fi
+                        echo "Attempt $i: HTTP $STATUS - retrying in 10s..."
+                        sleep 10
+                      done
+
+                      echo "##vso[task.logissue type=warning]Production health check did not return 200"
+                      exit 1

@@ -1,30 +1,31 @@
-name: 'Azure Devops Pipeline Demo'
+name: 'CI Pipeline'
 
 resources:
   repositories:
     - repository: starter_rkemish
       type: git
       name: starter_rkemish
-      
 
 trigger:
   - main
 
 variables:
-  group: my-variable-group
-  name: isMain
-  value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+  - group: my-variable-group
+  - group: deployment-details
+  - name: isMain
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
 
 stages:
+
+  # ──────────────────────────────────────────────
+  # Stage 1: Build and Test
+  # ──────────────────────────────────────────────
   - stage: BuildTest
-    displayName: Build and Test Stage
+    displayName: Build and Test
 
     jobs:
       - job: BuildTest
-     
-
         displayName: Build and Test Job
-
         pool:
           vmImage: 'ubuntu-latest'
 
@@ -33,7 +34,6 @@ stages:
           buildConfiguration: 'Release'
 
         steps:
-
           - checkout: self
           - checkout: starter_rkemish
 
@@ -65,11 +65,39 @@ stages:
               summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
 
       - job: SecurityAnalysis
-        dependsOn: BuildTest 
+        dependsOn: BuildTest
         condition: and(succeeded(), eq(variables.isMain, true))
+        steps:
+          - task: MicrosoftSecurityDevOps@1
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Build and Push Docker Image to ACR
+  # ──────────────────────────────────────────────
+  - stage: DockerBuildPush
+    displayName: Build and Push Docker Image
+    dependsOn: BuildTest
+    condition: and(succeeded(), eq(variables.isMain, true))
+
+    jobs:
+      - job: BuildPushImage
+        displayName: Build and Push to ACR
+        pool:
+          vmImage: 'ubuntu-latest'
 
         steps:
+          - task: Docker@2
+            displayName: 'Login to ACR'
+            inputs:
+              command: 'login'
+              containerRegistry: '$(acrServiceConnection)'
 
-          - task: MicrosoftSecurityDevOps@1
-         
-    
+          - task: Docker@2
+            displayName: 'Build and Push Image'
+            inputs:
+              command: 'buildAndPush'
+              repository: '$(webAppName)'
+              dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+              containerRegistry: '$(acrServiceConnection)'
+              tags: |
+                $(Build.BuildId)
+                latest
