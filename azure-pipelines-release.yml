@@ -61,6 +61,22 @@ stages:
 
     jobs:
       - deployment: DeployToStaging
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: '$(azureSubscription)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az group create \
+        --name "$(resourceGroupName)" \
+        --location "$(location)"
+      
+      az deployment group create \
+        --resource-group "$(resourceGroupName)" \
+        --template-file infra/main.bicep \
+        --parameters infra/main.bicepparam \
+        --parameters \
+          appName="$(webAppName)"
         displayName: Deploy to Staging
         pool:
           vmImage: 'ubuntu-latest'
