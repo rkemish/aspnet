@@ -5,9 +5,6 @@ trigger:
 
 variables:
   - group: my-variable-group
-  - group: deployment-details
-  - name: isMain
-    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
 
 stages:
 
@@ -57,40 +54,3 @@ stages:
             inputs:
               summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
 
-      - job: SecurityAnalysis
-        dependsOn: BuildTest
-        condition: and(succeeded(), eq(variables.isMain, true))
-        steps:
-          - task: MicrosoftSecurityDevOps@1
-
-  # ──────────────────────────────────────────────
-  # Stage 2: Build and Push Docker Image to ACR
-  # ──────────────────────────────────────────────
-  - stage: DockerBuildPush
-    displayName: Build and Push Docker Image
-    dependsOn: BuildTest
-    condition: and(succeeded(), eq(variables.isMain, true))
-
-    jobs:
-      - job: BuildPushImage
-        displayName: Build and Push to ACR
-        pool:
-          vmImage: 'ubuntu-latest'
-
-        steps:
-          - task: Docker@2
-            displayName: 'Login to ACR'
-            inputs:
-              command: 'login'
-              containerRegistry: '$(acrServiceConnection)'
-
-          - task: Docker@2
-            displayName: 'Build and Push Image'
-            inputs:
-              command: 'buildAndPush'
-              repository: '$(webAppName)'
-              dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
-              containerRegistry: '$(acrServiceConnection)'
-              tags: |
-                $(Build.BuildId)
-                latest
