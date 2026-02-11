@@ -1,11 +1,5 @@
 name: 'CI Pipeline'
 
-resources:
-  repositories:
-    - repository: starter_rkemish
-      type: git
-      name: starter_rkemish
-
 trigger:
   - main
 
@@ -35,7 +29,6 @@ stages:
 
         steps:
           - checkout: self
-          - checkout: starter_rkemish
 
           - script: echo '$(myhello)'
 
