@@ -14,8 +14,6 @@ param appConfigSku string = 'free'
 // Variables
 // ──────────────────────────────────────────────
 
-var appConfigDataReaderRoleId = '516239f1-63e1-4d78-a4de-a74fb236a071'
-
 var themeDefaults = [
   { key: 'Primary', value: '#6366f1' }
   { key: 'PrimaryDark', value: '#4f46e5' }
@@ -125,36 +123,6 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2023-12-01' = {
       ]
     }
     httpsOnly: true
-  }
-}
-
-// ──────────────────────────────────────────────
-// Role Assignments — App Configuration Data Reader
-// ──────────────────────────────────────────────
-
-resource webAppConfigRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appConfig.id, webApp.id, appConfigDataReaderRoleId)
-  scope: appConfig
-  properties: {
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      appConfigDataReaderRoleId
-    )
-    principalId: webApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource stagingSlotConfigRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appConfig.id, stagingSlot.id, appConfigDataReaderRoleId)
-  scope: appConfig
-  properties: {
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      appConfigDataReaderRoleId
-    )
-    principalId: stagingSlot.identity.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 

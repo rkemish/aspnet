@@ -52,6 +52,47 @@ stages:
                   --parameters \
                     appName="$(webAppName)"
 
+          # Role assignments require 'User Access Administrator' or 'Owner' on the
+          # resource group. continueOnError lets the pipeline proceed if the SP
+          # only has Contributor — assign roles manually in that case.
+          - task: AzureCLI@2
+            displayName: 'Assign App Configuration Reader roles'
+            continueOnError: true
+            inputs:
+              azureSubscription: 'Azure'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                APP_CONFIG_ID=$(az appconfig show \
+                  --name "$(webAppName)-config" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query id -o tsv)
+
+                WEBAPP_PRINCIPAL=$(az webapp identity show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query principalId -o tsv)
+
+                STAGING_PRINCIPAL=$(az webapp identity show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --slot staging \
+                  --query principalId -o tsv)
+
+                echo "Assigning App Configuration Data Reader to web app..."
+                az role assignment create \
+                  --assignee-object-id "$WEBAPP_PRINCIPAL" \
+                  --assignee-principal-type ServicePrincipal \
+                  --role "App Configuration Data Reader" \
+                  --scope "$APP_CONFIG_ID"
+
+                echo "Assigning App Configuration Data Reader to staging slot..."
+                az role assignment create \
+                  --assignee-object-id "$STAGING_PRINCIPAL" \
+                  --assignee-principal-type ServicePrincipal \
+                  --role "App Configuration Data Reader" \
+                  --scope "$APP_CONFIG_ID"
+
   # ──────────────────────────────────────────────
   # Stage 2: Deploy to Staging Slot (Blue)
   # ──────────────────────────────────────────────
