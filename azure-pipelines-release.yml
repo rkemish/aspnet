@@ -37,7 +37,7 @@ stages:
           - task: AzureCLI@2
             displayName: 'Deploy Bicep'
             inputs:
-              azureSubscription: '$(azureSubscription)'
+              azureSubscription: 'Azure'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
@@ -61,22 +61,6 @@ stages:
 
     jobs:
       - deployment: DeployToStaging
-- task: AzureCLI@2
-  inputs:
-    azureSubscription: '$(azureSubscription)'
-    scriptType: 'bash'
-    scriptLocation: 'inlineScript'
-    inlineScript: |
-      az group create \
-        --name "$(resourceGroupName)" \
-        --location "$(location)"
-      
-      az deployment group create \
-        --resource-group "$(resourceGroupName)" \
-        --template-file infra/main.bicep \
-        --parameters infra/main.bicepparam \
-        --parameters \
-          appName="$(webAppName)"
         displayName: Deploy to Staging
         pool:
           vmImage: 'ubuntu-latest'
@@ -91,7 +75,7 @@ stages:
                 - task: AzureWebApp@1
                   displayName: 'Deploy to Staging Slot'
                   inputs:
-                    azureSubscription: '$(azureSubscription)'
+                    azureSubscription: 'Azure'
                     appType: 'webAppLinux'
                     appName: '$(webAppName)'
                     deployToSlotOrASE: true
@@ -102,7 +86,7 @@ stages:
                 - task: AzureCLI@2
                   displayName: 'Verify Staging Health'
                   inputs:
-                    azureSubscription: '$(azureSubscription)'
+                    azureSubscription: 'Azure'
                     scriptType: 'bash'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
@@ -142,7 +126,7 @@ stages:
                 - task: AzureAppServiceManage@0
                   displayName: 'Swap Staging → Production'
                   inputs:
-                    azureSubscription: '$(azureSubscription)'
+                    azureSubscription: 'Azure'
                     action: 'Swap Slots'
                     webAppName: '$(webAppName)'
                     resourceGroupName: '$(resourceGroupName)'
@@ -151,7 +135,7 @@ stages:
                 - task: AzureCLI@2
                   displayName: 'Verify Production Health'
                   inputs:
-                    azureSubscription: '$(azureSubscription)'
+                    azureSubscription: 'Azure'
                     scriptType: 'bash'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
