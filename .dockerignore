@@ -1,0 +1,7 @@
+bin/
+obj/
+aspnet.Tests/
+.git/
+.github/
+*.md
+*.yml
