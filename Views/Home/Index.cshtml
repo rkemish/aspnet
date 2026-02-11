@@ -1,8 +1,40 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@{
+    ViewData["Title"] = "Home";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome v1-Fork</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<section class="hero">
+    <div class="hero-content">
+        <h1>Build Modern Web Apps</h1>
+        <p>A clean, configurable ASP.NET Core application with a theme system powered by appsettings.json. Change colors from your configuration — no code changes needed.</p>
+        <div class="hero-actions">
+            <a href="https://learn.microsoft.com/aspnet/core" class="btn-theme btn-theme-primary">Get Started</a>
+            <a asp-controller="Home" asp-action="Privacy" class="btn-theme btn-theme-outline">Learn More</a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <div class="section-header">
+            <h2>Why ASP.NET Core?</h2>
+            <p>Everything you need to build fast, secure, and scalable web applications.</p>
+        </div>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon feature-icon-primary">&#9881;</div>
+                <h3>Configurable Themes</h3>
+                <p>All colors are driven by appsettings.json. Swap your entire color palette without touching CSS — just update the Theme section in your configuration.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon feature-icon-secondary">&#9889;</div>
+                <h3>Blazing Fast</h3>
+                <p>ASP.NET Core is one of the fastest web frameworks available, with built-in support for static asset versioning and response compression.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon feature-icon-accent">&#9670;</div>
+                <h3>Production Ready</h3>
+                <p>Built-in dependency injection, middleware pipeline, logging, and configuration make it straightforward to build robust, maintainable applications.</p>
+            </div>
+        </div>
+    </div>
+</section>
