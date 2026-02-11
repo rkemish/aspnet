@@ -44,7 +44,6 @@ jobs:
 
   security-analysis:
     name: Security Analysis
-    needs: build-test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
