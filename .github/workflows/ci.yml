@@ -1,0 +1,61 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout starter_rkemish
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/starter_rkemish
+          path: starter_rkemish
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Echo variable
+        run: echo '${{ vars.MYHELLO }}'
+
+      - name: Restore
+        run: dotnet restore **/*.sln
+
+      - name: Build
+        run: dotnet build **/*.sln --configuration Release
+
+      - name: Run Tests
+        run: dotnet test **/*Tests.csproj --configuration Release --collect:"XPlat Code Coverage" --settings aspnet.Tests/coverage.runsettings
+
+      - name: Upload Code Coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage
+          path: '**/coverage.cobertura.xml'
+
+  security-analysis:
+    name: Security Analysis
+    needs: build-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Microsoft Security DevOps
+        uses: microsoft/security-devops-action@v1
