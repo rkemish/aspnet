@@ -8,7 +8,7 @@ trigger: none
 resources:
   pipelines:
     - pipeline: ci
-      source: 'AzureDevops Starter'
+      source: 'AzureDevops CI'
       trigger:
         branches:
           include:
