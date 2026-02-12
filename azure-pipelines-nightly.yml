@@ -41,6 +41,7 @@ stages:
               echo "========================================="
 
               mkdir -p "$(Build.ArtifactStagingDirectory)/zap"
+              chmod 777 "$(Build.ArtifactStagingDirectory)/zap"
 
               docker run --rm \
                 -v "$(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw" \

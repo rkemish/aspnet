@@ -16,6 +16,7 @@ echo "Target: $TARGET_URL"
 echo "========================================="
 
 mkdir -p "$OUTPUT_DIR"
+chmod 777 "$OUTPUT_DIR"
 
 # Run ZAP baseline scan (passive only — safe for every deployment)
 # -t: target URL
