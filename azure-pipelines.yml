@@ -37,7 +37,6 @@ stages:
 
           - task: DotNetCoreCLI@2
             displayName: 'Build with Analyzers'
-            continueOnError: true
             inputs:
               command: 'build'
               projects: '$(solution)'
@@ -45,7 +44,6 @@ stages:
 
           - script: dotnet format aspnet.sln --verify-no-changes --no-restore
             displayName: 'Verify Code Style (dotnet format)'
-            continueOnError: true
 
       - job: OSSVulnerabilityScan
         displayName: OSS Vulnerability & Deprecation Scan
@@ -68,17 +66,24 @@ stages:
               echo "========================================="
               echo "Checking for vulnerable packages..."
               echo "========================================="
-              dotnet list aspnet.sln package --vulnerable --include-transitive
+              OUTPUT=$(dotnet list aspnet.sln package --vulnerable --include-transitive)
+              echo "$OUTPUT"
+              if echo "$OUTPUT" | grep -q "has the following vulnerable packages"; then
+                echo "##vso[task.logissue type=error]Vulnerable packages detected"
+                exit 1
+              fi
             displayName: 'Check Vulnerable Packages'
-            continueOnError: true
 
           - script: |
               echo "========================================="
               echo "Checking for deprecated packages..."
               echo "========================================="
-              dotnet list aspnet.sln package --deprecated --include-transitive
+              OUTPUT=$(dotnet list aspnet.sln package --deprecated --include-transitive)
+              echo "$OUTPUT"
+              if echo "$OUTPUT" | grep -q "has the following deprecated packages"; then
+                echo "##vso[task.logissue type=warning]Deprecated packages detected"
+              fi
             displayName: 'Check Deprecated Packages'
-            continueOnError: true
 
   # ──────────────────────────────────────────────
   # Stage 2: Build and Test
