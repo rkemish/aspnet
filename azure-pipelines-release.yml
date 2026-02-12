@@ -20,10 +20,62 @@ variables:
 stages:
 
   # ──────────────────────────────────────────────
-  # Stage 1: Provision Infrastructure (Bicep)
+  # Stage 1: Infrastructure Scan (PSRule for Azure)
+  # ──────────────────────────────────────────────
+  - stage: InfrastructureScan
+    displayName: Infrastructure Security Scan
+
+    jobs:
+      - job: PSRuleScan
+        displayName: PSRule for Azure - Bicep Validation
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - checkout: self
+
+          - task: PowerShell@2
+            displayName: 'Install PSRule for Azure'
+            inputs:
+              targetType: 'inline'
+              script: |
+                Install-Module -Name PSRule.Rules.Azure -Force -Scope CurrentUser
+                Install-Module -Name PSRule -Force -Scope CurrentUser
+              pwsh: true
+
+          - task: PowerShell@2
+            displayName: 'Run PSRule Analysis on Bicep'
+            continueOnError: true
+            inputs:
+              targetType: 'inline'
+              script: |
+                $results = Invoke-PSRule -InputPath 'infra/' `
+                  -Module PSRule.Rules.Azure `
+                  -As Summary `
+                  -OutputFormat Markdown `
+                  -OutputPath '$(Build.ArtifactStagingDirectory)/psrule-report.md'
+
+                # Also output to console for pipeline logs
+                Invoke-PSRule -InputPath 'infra/' `
+                  -Module PSRule.Rules.Azure `
+                  -As Detail
+
+                Write-Host "PSRule analysis complete. See artifact for full report."
+              pwsh: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish PSRule Report'
+            condition: always()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)'
+              artifact: 'infrastructure-scan'
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Provision Infrastructure (Bicep)
   # ──────────────────────────────────────────────
   - stage: Infrastructure
     displayName: Provision Infrastructure
+    dependsOn: InfrastructureScan
 
     jobs:
       - job: DeployBicep
@@ -94,7 +146,7 @@ stages:
                   --scope "$APP_CONFIG_ID"
 
   # ──────────────────────────────────────────────
-  # Stage 2: Deploy to Staging Slot (Blue)
+  # Stage 3: Deploy to Staging Slot (Blue)
   # ──────────────────────────────────────────────
   - stage: DeployStaging
     displayName: Deploy to Staging Slot
@@ -147,8 +199,36 @@ stages:
                       echo "##vso[task.logissue type=error]Staging slot health check failed"
                       exit 1
 
+      - job: StagingSecurityScan
+        displayName: Staging Security Scans
+        dependsOn: DeployToStaging
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - checkout: self
+
+          - script: |
+              chmod +x scripts/zap-baseline.sh
+              scripts/zap-baseline.sh "https://$(webAppName)-staging.azurewebsites.net" "$(Build.ArtifactStagingDirectory)"
+            displayName: 'OWASP ZAP Baseline Scan'
+            continueOnError: true
+
+          - script: |
+              chmod +x scripts/ssl-scan.sh
+              scripts/ssl-scan.sh "$(webAppName)-staging.azurewebsites.net" "$(Build.ArtifactStagingDirectory)"
+            displayName: 'SSL/TLS Scan (testssl.sh)'
+            continueOnError: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Security Scan Reports'
+            condition: always()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)'
+              artifact: 'staging-security-scans'
+
   # ──────────────────────────────────────────────
-  # Stage 3: Manual Approval and Swap (Green)
+  # Stage 4: Manual Approval and Swap (Green)
   # ──────────────────────────────────────────────
   - stage: SwapToProduction
     displayName: Swap to Production
@@ -195,3 +275,78 @@ stages:
 
                       echo "##vso[task.logissue type=warning]Production health check did not return 200"
                       exit 1
+
+      - job: ProductionValidation
+        displayName: Production Security Validation
+        dependsOn: SwapSlots
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - task: AzureCLI@2
+            displayName: 'Validate Production Security Configuration'
+            continueOnError: true
+            inputs:
+              azureSubscription: 'Azure'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "========================================="
+                echo "Production Security Validation"
+                echo "========================================="
+
+                FAILED=0
+
+                # Check HTTPS Only
+                HTTPS_ONLY=$(az webapp show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query "httpsOnly" -o tsv)
+                if [ "$HTTPS_ONLY" = "true" ]; then
+                  echo "✅ HTTPS Only: enabled"
+                else
+                  echo "❌ HTTPS Only: DISABLED"
+                  FAILED=1
+                fi
+
+                # Check Managed Identity
+                IDENTITY=$(az webapp identity show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query "type" -o tsv 2>/dev/null || echo "None")
+                if [ "$IDENTITY" != "None" ] && [ -n "$IDENTITY" ]; then
+                  echo "✅ Managed Identity: $IDENTITY"
+                else
+                  echo "❌ Managed Identity: not configured"
+                  FAILED=1
+                fi
+
+                # Check Minimum TLS Version
+                MIN_TLS=$(az webapp show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query "siteConfig.minTlsVersion" -o tsv)
+                if [ "$MIN_TLS" = "1.2" ] || [ "$MIN_TLS" = "1.3" ]; then
+                  echo "✅ Minimum TLS Version: $MIN_TLS"
+                else
+                  echo "⚠️  Minimum TLS Version: $MIN_TLS (recommend 1.2+)"
+                  FAILED=1
+                fi
+
+                # Check FTPS State
+                FTPS_STATE=$(az webapp show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query "siteConfig.ftpsState" -o tsv)
+                if [ "$FTPS_STATE" = "Disabled" ] || [ "$FTPS_STATE" = "FtpsOnly" ]; then
+                  echo "✅ FTPS State: $FTPS_STATE"
+                else
+                  echo "⚠️  FTPS State: $FTPS_STATE (recommend Disabled or FtpsOnly)"
+                fi
+
+                echo "========================================="
+                if [ "$FAILED" -eq 1 ]; then
+                  echo "##vso[task.logissue type=warning]Some production security checks did not pass"
+                else
+                  echo "All production security checks passed"
+                fi

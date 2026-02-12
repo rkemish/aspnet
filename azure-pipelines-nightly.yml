@@ -1,0 +1,300 @@
+name: 'Nightly Security & Performance Tests'
+
+# ──────────────────────────────────────────────
+# Runs nightly at 2:00 AM UTC against staging
+# ──────────────────────────────────────────────
+trigger: none
+
+schedules:
+  - cron: '0 2 * * *'
+    displayName: 'Nightly 2:00 AM UTC'
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  - group: deployment-details
+
+stages:
+
+  # ──────────────────────────────────────────────
+  # Stage 1: Active Penetration Test (OWASP ZAP Full Scan)
+  # ──────────────────────────────────────────────
+  - stage: ActivePenTest
+    displayName: Active Penetration Test
+
+    jobs:
+      - job: ZAPFullScan
+        displayName: OWASP ZAP Full Scan
+        pool:
+          vmImage: 'ubuntu-latest'
+        timeoutInMinutes: 90
+
+        steps:
+          - checkout: self
+
+          - script: |
+              echo "========================================="
+              echo "OWASP ZAP Full Scan (Active)"
+              echo "Target: https://$(webAppName)-staging.azurewebsites.net"
+              echo "========================================="
+
+              mkdir -p "$(Build.ArtifactStagingDirectory)/zap"
+
+              docker run --rm \
+                -v "$(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw" \
+                ghcr.io/zaproxy/zaproxy:stable \
+                zap-full-scan.py \
+                  -t "https://$(webAppName)-staging.azurewebsites.net" \
+                  -r zap-full-report.html \
+                  -J zap-full-report.json \
+                  -I || true
+
+              echo "ZAP full scan complete."
+            displayName: 'Run ZAP Full Scan'
+            continueOnError: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish ZAP Reports'
+            condition: always()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/zap'
+              artifact: 'nightly-zap-full-scan'
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Load and Performance Test (k6)
+  # ──────────────────────────────────────────────
+  - stage: LoadTest
+    displayName: Load & Performance Test
+
+    jobs:
+      - job: K6LoadTest
+        displayName: k6 Load Test
+        pool:
+          vmImage: 'ubuntu-latest'
+        timeoutInMinutes: 30
+
+        steps:
+          - checkout: self
+
+          - script: |
+              echo "Installing k6..."
+              sudo gpg -k
+              sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+              echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+              sudo apt-get update
+              sudo apt-get install k6 -y
+            displayName: 'Install k6'
+
+          - script: |
+              echo "========================================="
+              echo "k6 Load Test"
+              echo "Target: https://$(webAppName)-staging.azurewebsites.net"
+              echo "========================================="
+
+              mkdir -p "$(Build.ArtifactStagingDirectory)/k6"
+
+              K6_TARGET_URL="https://$(webAppName)-staging.azurewebsites.net" \
+                k6 run scripts/load-test.js \
+                  --out json="$(Build.ArtifactStagingDirectory)/k6/k6-results.json" \
+                  --summary-export="$(Build.ArtifactStagingDirectory)/k6/k6-summary.json" || true
+
+              echo "k6 load test complete."
+            displayName: 'Run k6 Load Test'
+            continueOnError: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish k6 Results'
+            condition: always()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/k6'
+              artifact: 'nightly-k6-load-test'
+
+  # ──────────────────────────────────────────────
+  # Stage 3: Full Regression Tests
+  # ──────────────────────────────────────────────
+  - stage: RegressionTests
+    displayName: Regression Tests
+
+    jobs:
+      - job: FullTestSuite
+        displayName: Full xUnit Test Suite
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        variables:
+          solution: '**/*.sln'
+          buildConfiguration: 'Release'
+
+        steps:
+          - checkout: self
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: '$(solution)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build'
+            inputs:
+              command: 'build'
+              projects: '$(solution)'
+              arguments: '--configuration $(buildConfiguration)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Run Full Test Suite'
+            inputs:
+              command: 'test'
+              projects: '**/*Tests.csproj'
+              arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --settings aspnet.Tests/coverage.runsettings --logger trx'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/*.trx'
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish Code Coverage'
+            condition: always()
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+
+  # ──────────────────────────────────────────────
+  # Stage 4: Infrastructure Drift Detection
+  # ──────────────────────────────────────────────
+  - stage: InfrastructureScan
+    displayName: Infrastructure Scan & Drift Detection
+
+    jobs:
+      - job: PSRuleAndAudit
+        displayName: PSRule + Azure Resource Audit
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - checkout: self
+
+          - task: PowerShell@2
+            displayName: 'Install PSRule for Azure'
+            inputs:
+              targetType: 'inline'
+              script: |
+                Install-Module -Name PSRule.Rules.Azure -Force -Scope CurrentUser
+                Install-Module -Name PSRule -Force -Scope CurrentUser
+              pwsh: true
+
+          - task: PowerShell@2
+            displayName: 'Run PSRule Analysis'
+            continueOnError: true
+            inputs:
+              targetType: 'inline'
+              script: |
+                mkdir -p '$(Build.ArtifactStagingDirectory)/infra'
+
+                Invoke-PSRule -InputPath 'infra/' `
+                  -Module PSRule.Rules.Azure `
+                  -As Summary `
+                  -OutputFormat Markdown `
+                  -OutputPath '$(Build.ArtifactStagingDirectory)/infra/psrule-nightly-report.md'
+
+                Invoke-PSRule -InputPath 'infra/' `
+                  -Module PSRule.Rules.Azure `
+                  -As Detail
+              pwsh: true
+
+          - task: AzureCLI@2
+            displayName: 'Audit Deployed Azure Resources'
+            continueOnError: true
+            inputs:
+              azureSubscription: 'Azure'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "========================================="
+                echo "Nightly Infrastructure Audit"
+                echo "========================================="
+
+                mkdir -p "$(Build.ArtifactStagingDirectory)/infra"
+
+                # Export current resource configuration
+                az webapp show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  -o json > "$(Build.ArtifactStagingDirectory)/infra/webapp-config.json"
+
+                # Check security-relevant settings
+                echo ""
+                echo "--- Security Configuration ---"
+                az webapp show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query "{httpsOnly:httpsOnly, minTlsVersion:siteConfig.minTlsVersion, ftpsState:siteConfig.ftpsState, http20Enabled:siteConfig.http20Enabled, identity:identity.type}" \
+                  -o table
+
+                echo ""
+                echo "--- App Service Plan ---"
+                az appservice plan show \
+                  --name "$(webAppName)-plan" \
+                  --resource-group "$(resourceGroupName)" \
+                  --query "{sku:sku.name, capacity:sku.capacity, kind:kind}" \
+                  -o table
+
+                echo ""
+                echo "--- Staging Slot Configuration ---"
+                az webapp show \
+                  --name "$(webAppName)" \
+                  --resource-group "$(resourceGroupName)" \
+                  --slot staging \
+                  --query "{httpsOnly:httpsOnly, minTlsVersion:siteConfig.minTlsVersion, identity:identity.type}" \
+                  -o table
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Infrastructure Reports'
+            condition: always()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/infra'
+              artifact: 'nightly-infrastructure-scan'
+
+  # ──────────────────────────────────────────────
+  # Stage 5: Summary Report
+  # ──────────────────────────────────────────────
+  - stage: Report
+    displayName: Nightly Report Summary
+    dependsOn:
+      - ActivePenTest
+      - LoadTest
+      - RegressionTests
+      - InfrastructureScan
+    condition: always()
+
+    jobs:
+      - job: Summary
+        displayName: Generate Summary
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - script: |
+              echo "========================================="
+              echo "Nightly DevSecOps Run Summary"
+              echo "Date: $(date -u '+%Y-%m-%d %H:%M UTC')"
+              echo "========================================="
+              echo ""
+              echo "Stages completed:"
+              echo "  - Active Penetration Test (ZAP Full Scan)"
+              echo "  - Load & Performance Test (k6)"
+              echo "  - Regression Tests (xUnit)"
+              echo "  - Infrastructure Scan (PSRule + Azure Audit)"
+              echo ""
+              echo "Check individual stage artifacts for detailed reports."
+              echo ""
+              echo "Artifacts:"
+              echo "  - nightly-zap-full-scan"
+              echo "  - nightly-k6-load-test"
+              echo "  - nightly-infrastructure-scan"
+              echo "========================================="
+            displayName: 'Print Summary'

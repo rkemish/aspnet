@@ -3,16 +3,89 @@ name: 'CI Pipeline'
 trigger:
   - main
 
+pr:
+  - main
+
 variables:
   - group: my-variable-group
 
 stages:
 
   # ──────────────────────────────────────────────
-  # Stage 1: Build and Test
+  # Stage 1: Static Analysis (runs in parallel with BuildTest)
+  # ──────────────────────────────────────────────
+  - stage: StaticAnalysis
+    displayName: Static Analysis
+
+    jobs:
+      - job: CodeAnalysis
+        displayName: Roslyn Analyzers & Code Style
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        variables:
+          solution: '**/*.sln'
+
+        steps:
+          - checkout: self
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: '$(solution)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build with Analyzers'
+            continueOnError: true
+            inputs:
+              command: 'build'
+              projects: '$(solution)'
+              arguments: '--configuration Release --no-restore'
+
+          - script: dotnet format aspnet.sln --verify-no-changes --no-restore
+            displayName: 'Verify Code Style (dotnet format)'
+            continueOnError: true
+
+      - job: OSSVulnerabilityScan
+        displayName: OSS Vulnerability & Deprecation Scan
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        variables:
+          solution: '**/*.sln'
+
+        steps:
+          - checkout: self
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: '$(solution)'
+
+          - script: |
+              echo "========================================="
+              echo "Checking for vulnerable packages..."
+              echo "========================================="
+              dotnet list aspnet.sln package --vulnerable --include-transitive
+            displayName: 'Check Vulnerable Packages'
+            continueOnError: true
+
+          - script: |
+              echo "========================================="
+              echo "Checking for deprecated packages..."
+              echo "========================================="
+              dotnet list aspnet.sln package --deprecated --include-transitive
+            displayName: 'Check Deprecated Packages'
+            continueOnError: true
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Build and Test
   # ──────────────────────────────────────────────
   - stage: BuildTest
     displayName: Build and Test
+    dependsOn: StaticAnalysis
 
     jobs:
       - job: BuildTest

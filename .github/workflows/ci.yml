@@ -17,14 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.x'
 
       - name: Echo variable
-        run: echo '${{ vars.MYHELLO }}'
+        env:
+          MYHELLO: ${{ vars.MYHELLO }}
+        run: echo "$MYHELLO"
 
       - name: Restore
         run: dotnet restore aspnet.sln
@@ -41,6 +42,32 @@ jobs:
         with:
           name: code-coverage
           path: '**/coverage.cobertura.xml'
+
+  pr-checks:
+    name: PR Security Checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore aspnet.sln
+
+      - name: Verify Code Style
+        run: dotnet format aspnet.sln --verify-no-changes --no-restore
+
+      - name: Check Vulnerable Packages
+        run: dotnet list aspnet.sln package --vulnerable --include-transitive
+
+      - name: Check Deprecated Packages
+        run: dotnet list aspnet.sln package --deprecated --include-transitive
 
   docker:
     name: Build and Push Docker Image
@@ -81,8 +108,11 @@ jobs:
 
   security-analysis:
     name: Security Analysis
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
 
     steps:
       - name: Checkout

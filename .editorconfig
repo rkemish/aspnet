@@ -1,0 +1,118 @@
+# Top-level EditorConfig
+root = true
+
+# ──────────────────────────────────────────────
+# All files
+# ──────────────────────────────────────────────
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# ──────────────────────────────────────────────
+# XML / JSON / YAML
+# ──────────────────────────────────────────────
+[*.{xml,csproj,props,targets,json,yml,yaml}]
+indent_size = 2
+
+# ──────────────────────────────────────────────
+# C# files
+# ──────────────────────────────────────────────
+[*.cs]
+
+# Formatting
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+
+# Code style — var preferences
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# Code style — expression-bodied members
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+
+# Code style — pattern matching
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+
+# Code style — null checking
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+
+# Using directives
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Namespace declarations
+csharp_style_namespace_declarations = file_scoped:warning
+
+# ──────────────────────────────────────────────
+# Security-critical analyzer rules — ERROR
+# ──────────────────────────────────────────────
+
+# Weak cryptography
+dotnet_diagnostic.CA5350.severity = error   # Do not use weak cryptographic algorithms
+dotnet_diagnostic.CA5351.severity = error   # Do not use broken cryptographic algorithms
+
+# Insecure XML processing
+dotnet_diagnostic.CA3075.severity = error   # Insecure DTD processing
+dotnet_diagnostic.CA3076.severity = error   # Insecure XSLT script processing
+dotnet_diagnostic.CA3077.severity = error   # Insecure processing in API design, XmlDocument, XmlTextReader
+
+# Certificate / SSL rules
+dotnet_diagnostic.CA5359.severity = error   # Do not disable certificate validation
+dotnet_diagnostic.CA5360.severity = error   # Do not call dangerous methods in deserialization
+dotnet_diagnostic.CA5361.severity = error   # Do not disable SChannel use of strong crypto
+dotnet_diagnostic.CA5362.severity = error   # Potential reference cycle in deserialized object graph
+dotnet_diagnostic.CA5363.severity = error   # Do not disable request validation
+dotnet_diagnostic.CA5364.severity = error   # Do not use deprecated security protocols
+dotnet_diagnostic.CA5365.severity = error   # Do not disable HTTP header checking
+
+# SQL injection / command injection
+dotnet_diagnostic.CA2100.severity = error   # Review SQL queries for security vulnerabilities
+
+# SecurityCodeScan rules — ERROR for critical findings
+dotnet_diagnostic.SCS0001.severity = error  # Command injection
+dotnet_diagnostic.SCS0002.severity = error  # SQL injection
+dotnet_diagnostic.SCS0003.severity = error  # XPath injection
+dotnet_diagnostic.SCS0007.severity = error  # XML eXternal Entity injection
+dotnet_diagnostic.SCS0018.severity = error  # Path traversal
+dotnet_diagnostic.SCS0026.severity = error  # SQL injection (MsSQL)
+dotnet_diagnostic.SCS0027.severity = error  # Open redirect
+dotnet_diagnostic.SCS0029.severity = error  # Cross-site scripting (XSS)
+
+# SecurityCodeScan rules — WARNING for medium severity
+dotnet_diagnostic.SCS0004.severity = warning  # Certificate validation disabled
+dotnet_diagnostic.SCS0005.severity = warning  # Weak random number generator
+dotnet_diagnostic.SCS0006.severity = warning  # Weak hashing function
+dotnet_diagnostic.SCS0008.severity = warning  # Cookie without Secure flag
+dotnet_diagnostic.SCS0009.severity = warning  # Cookie without HttpOnly flag
+dotnet_diagnostic.SCS0019.severity = warning  # OutputCache conflict
+dotnet_diagnostic.SCS0021.severity = warning  # Request validation disabled
+dotnet_diagnostic.SCS0022.severity = warning  # Event validation disabled
+dotnet_diagnostic.SCS0023.severity = warning  # View state not encrypted
+dotnet_diagnostic.SCS0024.severity = warning  # View state MAC disabled
+dotnet_diagnostic.SCS0028.severity = warning  # Insecure deserialization
+dotnet_diagnostic.SCS0032.severity = warning  # Password in hardcoded string
+dotnet_diagnostic.SCS0034.severity = warning  # Password RequiredLength not set
+
+# ──────────────────────────────────────────────
+# General code quality — WARNING
+# ──────────────────────────────────────────────
+dotnet_diagnostic.CA1062.severity = warning   # Validate arguments of public methods
+dotnet_diagnostic.CA1822.severity = suggestion  # Mark members as static
+dotnet_diagnostic.CA2007.severity = suggestion  # Consider calling ConfigureAwait
